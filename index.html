@@ -214,10 +214,29 @@
   </section>
 
   <div class="backtest fade-up" id="backtest">
-    <div class="bt-big">−6.8%</div>
-    <div class="bt-txt"><h3>“과열 경고”는 통계적으로 유효합니다</h3>
-      <p>최근 1년 백테스트에서 모델이 <b style="color:var(--txt)">과열·버블</b>로 판정한 47개 사례의 <b style="color:var(--txt)">5거래일 후 평균 수익률은 −6.8%</b>였습니다. FOMO Radar는 추천이 아니라 군중 과열을 경고하는 레이더입니다.</p></div>
+    <div class="bt-big" style="color:var(--warm)">47%</div>
+    <div class="bt-txt"><h3>검색 급등 후, 절반은 하락했습니다</h3>
+      <p>실제 백테스트(2022–2026, 검색 z-score ≥ 2 급등 <b style="color:var(--txt)">502건</b>): 5거래일 후 평균은 +2.4%였지만 <b style="color:var(--txt)">중앙값은 +0.4%에 불과</b>하고 <b style="color:var(--txt)">47%가 하락</b>했습니다. 일부 대박이 평균을 끌어올릴 뿐, 따라 들어가면 사실상 동전던지기입니다. FOMO Radar는 이 편차를 보여줍니다.</p></div>
   </div>
+
+  <!-- 백테스트 상세 표 -->
+  <section id="backtest-detail">
+    <div class="sechd"><h2>백테스트 — 검색 급등 후 수익률</h2><span class="cnt">실데이터</span>
+      <span class="desc">네이버 데이터랩 검색 트렌드 + 야후 주가. 검색이 30일 평균 +2σ 이상 급등한 시점 이후 수익률 분포.</span></div>
+    <div class="panel" style="padding:6px 4px">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--mono)">
+        <thead><tr style="color:var(--dim);font-size:11px;text-align:right">
+          <th style="text-align:left;padding:12px 16px">이후 기간</th>
+          <th style="padding:12px 16px">평균 수익률</th>
+          <th style="padding:12px 16px">중앙값</th>
+          <th style="padding:12px 16px">하락 확률</th>
+          <th style="padding:12px 16px">표본</th></tr></thead>
+        <tbody id="btbody"></tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:10px;text-align:right">
+      ※ 대상 15개 종목 · 검색 급등 이벤트 502건 · 평균＞중앙값은 소수 급등이 분포를 끌어올림을 의미</p>
+  </section>
 </div>
 
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
@@ -349,7 +368,10 @@ function lineSvg(series,color){
 async function openModal(s,idx){
   const st=STAGE[s.stage],cur=ORDER.indexOf(s.stage);
   const steps=ORDER.map((k,i)=>{const o=STAGE[k];return `<div class="tstep ${i===cur?'active':''}" style="color:${o.col}"><div class="ts-i">${o.i}</div><div class="ts-l">${o.label}</div><div class="ts-s">${o.s}</div></div>`}).join('');
-  const fut=s.stage==='bubble'?'−7.2%':s.stage==='hot'?'−3.1%':s.stage==='spread'?'+2.4%':'+5.1%';
+  // 백테스트 실측: 검색급등 후 5일 평균 +2.4%지만 47%는 하락(편차 큼)
+  const futNote = (s.stage==='bubble'||s.stage==='hot')
+    ? '검색 급등 사례 47%가 5일 내 하락 — 추격 위험 구간'
+    : '확산·초기 단계는 변동성 큼 — 단기 모멘텀과 하락이 혼재';
   modal.innerHTML=`<button class="close" onclick="closeModal()">✕</button>
     <div class="mh"><div class="mrank">${idx!=null?'#'+(idx+1):'★'}</div>
       <div><div class="mnm">${s.name}</div><div class="mcd">${s.code} · ${st.i} ${st.label} 단계${s.demo?' · DEMO':''}</div></div>
@@ -362,7 +384,7 @@ async function openModal(s,idx){
         <div class="mmetric"><div class="l">긍정 감성</div><div class="n">${s.metrics.senti}</div></div></div>
         ${lineSvg(s.series&&s.series.search,'var(--hot)')}</div>
       <div class="msec"><h4>⏱ FOMO 타이머</h4><div class="timer">${steps}</div>
-        <div class="timer-note">현재 <b style="color:${st.col}">${st.label} 단계</b> · 과거 동일 단계 진입 후 5거래일 평균 <b style="color:${fut.startsWith('−')?'var(--cool)':'var(--good)'}">${fut}</b></div></div>
+        <div class="timer-note">현재 <b style="color:${st.col}">${st.label} 단계</b> · <span style="color:var(--warm)">${futNote}</span></div></div>
       <div class="msec"><h4>📰 실시간 뉴스</h4><div class="news" id="newsList">불러오는 중…</div></div>
     </div>`;
   overlay.classList.add('on');document.body.style.overflow='hidden';
@@ -419,6 +441,32 @@ async function analyzeOne(code,name){
 }
 
 // ---------- boot ----------
+// ---------- 백테스트 표 (실측 데이터) ----------
+const BACKTEST = {
+  period:["2022-01-01","2026-06-03"], events:502, tickers:15,
+  rows:[
+    {h:"+1일",  mean:1.24, med:0.68, down:38.3, n:501},
+    {h:"+3일",  mean:1.44, med:0.29, down:47.9, n:499},
+    {h:"+5일",  mean:2.39, med:0.37, down:47.4, n:498},
+    {h:"+10일", mean:3.16, med:1.53, down:44.6, n:496},
+  ]
+};
+function renderBacktest(){
+  const tb=document.getElementById('btbody');
+  if(!tb)return;
+  tb.innerHTML=BACKTEST.rows.map(r=>{
+    const mc=r.mean>=0?'var(--good)':'var(--cool)';
+    const dc=r.down>=50?'var(--hot)':'var(--warm)';
+    return `<tr style="border-top:1px solid var(--line);font-size:13px">
+      <td style="text-align:left;padding:13px 16px;font-weight:700">${r.h}</td>
+      <td style="text-align:right;padding:13px 16px;color:${mc};font-weight:700">${r.mean>=0?'+':''}${r.mean.toFixed(2)}%</td>
+      <td style="text-align:right;padding:13px 16px;color:var(--muted)">${r.med>=0?'+':''}${r.med.toFixed(2)}%</td>
+      <td style="text-align:right;padding:13px 16px;color:${dc};font-weight:700">${r.down.toFixed(1)}%</td>
+      <td style="text-align:right;padding:13px 16px;color:var(--dim)">${r.n}</td></tr>`;
+  }).join('');
+}
+renderBacktest();
+
 async function boot(){
   skeletons();
   let connected=false;
