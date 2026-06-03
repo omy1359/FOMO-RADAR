@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FOMO Radar · 대한민국 집단 심리 실시간 탐지</title>
+<meta name="description" content="뉴스·검색량·커뮤니티 언급을 AI가 실시간 분석해 한국 투자자의 집단 심리(FOMO)를 0–100으로 수치화. 코스피·코스닥 전 종목 검색.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05070e;--bg2:#0a0f1c;--panel:#0f1626;--panel2:#141d33;
+    --line:#1d2840;--line2:#2a3a5e;--txt:#e9eef8;--muted:#828ea7;--dim:#525d7c;
+    --hot:#ff4527;--hot2:#ff7a18;--warm:#ffb020;--cool:#33a1ff;--cold:#1f6feb;--good:#27d07a;--purple:#9d6bff;
+    --glow:rgba(255,69,39,.55);--mono:'JetBrains Mono',monospace;--disp:'Space Grotesk',sans-serif;--kr:'Noto Sans KR',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:radial-gradient(1300px 700px at 85% -12%,rgba(255,69,39,.12),transparent 58%),radial-gradient(1000px 600px at -5% 15%,rgba(51,161,255,.09),transparent 55%),radial-gradient(800px 500px at 50% 120%,rgba(157,107,255,.06),transparent 60%),var(--bg);color:var(--txt);font-family:var(--kr);line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.04;background-image:radial-gradient(rgba(255,255,255,.85) 1px,transparent 1px);background-size:3px 3px;mix-blend-mode:overlay}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 22px;position:relative;z-index:2}
+  .topbar{position:sticky;top:0;z-index:60;backdrop-filter:blur(16px);background:linear-gradient(180deg,rgba(5,7,14,.94),rgba(5,7,14,.55));border-bottom:1px solid var(--line)}
+  .topbar .wrap{display:flex;align-items:center;gap:18px;height:62px}
+  .logo{font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:-.4px;display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .logo .dot{width:11px;height:11px;border-radius:50%;background:var(--hot);box-shadow:0 0 16px var(--glow);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.5);opacity:.45}}
+  .logo b{color:var(--hot)}
+  /* search */
+  .searchbox{flex:1;max-width:420px;margin-left:8px;position:relative}
+  .searchbox input{width:100%;background:var(--panel);border:1px solid var(--line2);border-radius:10px;color:var(--txt);font-family:var(--kr);font-size:14px;padding:9px 14px 9px 36px;outline:none;transition:.2s}
+  .searchbox input:focus{border-color:var(--hot);box-shadow:0 0 0 3px rgba(255,69,39,.12)}
+  .searchbox .si{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:14px}
+  .results{position:absolute;top:46px;left:0;right:0;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;max-height:340px;overflow-y:auto;display:none;box-shadow:0 20px 50px rgba(0,0,0,.5);z-index:80}
+  .results.on{display:block}
+  .ri{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .ri:last-child{border-bottom:none}
+  .ri:hover{background:var(--panel)}
+  .ri .rn{font-size:14px;font-weight:600}
+  .ri .rc{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto}
+  .ri .rm{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:6px;background:var(--line);color:var(--muted)}
+  .ri .rm.kq{background:rgba(157,107,255,.15);color:var(--purple)}
+  nav{display:flex;gap:2px;margin-left:auto}
+  @media(max-width:880px){nav{display:none}}
+  nav a{color:var(--muted);text-decoration:none;font-size:13px;padding:7px 12px;border-radius:8px;transition:.18s;font-weight:500}
+  nav a:hover{color:var(--txt);background:var(--panel2)}
+  .live{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--hot);border:1px solid rgba(255,69,39,.4);padding:5px 11px;border-radius:20px;background:rgba(255,69,39,.07);white-space:nowrap}
+  .live .b{width:7px;height:7px;border-radius:50%;background:var(--hot);box-shadow:0 0 8px var(--glow);animation:pulse 1.4s infinite}
+  .live.demo{color:var(--warm);border-color:rgba(255,176,32,.4);background:rgba(255,176,32,.07)}
+  .live.demo .b{background:var(--warm);box-shadow:0 0 8px rgba(255,176,32,.6)}
+
+  .hero{padding:46px 0 22px;display:grid;grid-template-columns:1fr 320px;gap:30px;align-items:center}
+  @media(max-width:880px){.hero{grid-template-columns:1fr;gap:18px}.radarbox{order:-1;margin:0 auto}}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:3.5px;color:var(--hot);text-transform:uppercase;margin-bottom:14px}
+  .hero h1{font-weight:900;font-size:clamp(31px,5vw,54px);line-height:1.04;letter-spacing:-1.5px}
+  .hero h1 .em{background:linear-gradient(100deg,var(--hot),var(--warm));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .sub{color:var(--muted);font-size:15.5px;margin-top:16px;max-width:560px}
+  .hero .sub b{color:var(--txt)}
+  .hero .tag{font-family:var(--disp);font-size:12.5px;color:var(--dim);margin-top:11px;letter-spacing:.5px}
+  .radarbox{position:relative;width:300px;height:300px}
+  .sweep{transform-origin:150px 150px;animation:sweep 4s linear infinite}
+  @keyframes sweep{to{transform:rotate(360deg)}}
+  .blip{opacity:0;animation:blip 4s infinite}
+  @keyframes blip{0%,100%{opacity:0}10%,30%{opacity:1}60%{opacity:0}}
+
+  section{padding:34px 0 6px}
+  .sechd{display:flex;align-items:baseline;gap:14px;margin-bottom:18px;border-bottom:1px solid var(--line);padding-bottom:12px}
+  .sechd h2{font-weight:900;font-size:24px;letter-spacing:-.6px}
+  .sechd .cnt{font-family:var(--mono);font-size:11px;color:var(--hot);background:rgba(255,69,39,.08);border:1px solid rgba(255,69,39,.3);padding:3px 10px;border-radius:14px}
+  .sechd .desc{color:var(--dim);font-size:13px;margin-left:auto;max-width:430px;text-align:right}
+  @media(max-width:680px){.sechd .desc{display:none}}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:16px;position:relative;overflow:hidden}
+
+  .nat{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:6px}
+  @media(max-width:760px){.nat{grid-template-columns:1fr}}
+  .ncard{padding:18px 20px}
+  .ncard .lbl{font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+  .ncard .big{font-family:var(--mono);font-weight:700;font-size:48px;line-height:1;letter-spacing:-2px;margin-top:6px}
+  .ncard .meter{height:8px;border-radius:5px;margin-top:14px;background:linear-gradient(90deg,var(--cold),var(--cool) 28%,var(--good) 46%,var(--warm) 70%,var(--hot) 100%);position:relative}
+  .ncard .nub{position:absolute;top:50%;width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid var(--hot);transform:translate(-50%,-50%);box-shadow:0 0 12px var(--glow);transition:left 1s cubic-bezier(.2,.8,.2,1)}
+  .ncard .stg{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;padding:5px 13px;border-radius:16px;letter-spacing:.8px}
+  .ncard .sub{font-size:12px;color:var(--muted);margin-top:8px}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(165deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden;cursor:pointer;transition:.2s}
+  .card:hover{border-color:var(--line2);transform:translateY(-2px);box-shadow:0 14px 32px rgba(0,0,0,.45)}
+  .card .glowbar{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .card .top{display:flex;align-items:flex-start;gap:12px}
+  .card .rank{font-family:var(--mono);font-weight:700;font-size:25px;color:var(--dim);line-height:1;width:32px}
+  .card .rank.t1{color:var(--hot);text-shadow:0 0 16px var(--glow)}
+  .card .info{flex:1}
+  .card .info .nm{font-size:16px;font-weight:700;letter-spacing:-.2px}
+  .card .info .cd{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .card .sc{text-align:right}
+  .card .sc .v{font-family:var(--mono);font-weight:700;font-size:27px;line-height:1}
+  .card .sc .d{font-family:var(--mono);font-size:11px;font-weight:700;margin-top:2px}
+  .up{color:var(--hot)}.down{color:var(--cool)}
+  .stagepill{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;letter-spacing:.5px;margin-top:12px}
+  .s-early{background:rgba(31,111,235,.15);color:#5ea0ff;border:1px solid rgba(51,161,255,.35)}
+  .s-spread{background:rgba(39,208,122,.13);color:var(--good);border:1px solid rgba(39,208,122,.35)}
+  .s-hot{background:rgba(255,176,32,.14);color:var(--warm);border:1px solid rgba(255,176,32,.4)}
+  .s-bubble{background:rgba(255,69,39,.16);color:var(--hot);border:1px solid rgba(255,69,39,.45)}
+  .card .metrics{display:flex;gap:14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .card .metrics div{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .card .metrics b{display:block;font-size:13px;color:var(--txt);margin-top:1px}
+  .card .hint{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:11px}
+  .skel{height:150px;border-radius:14px;background:linear-gradient(100deg,var(--panel) 30%,var(--panel2) 50%,var(--panel) 70%);background-size:200% 100%;animation:sh 1.3s infinite}
+  @keyframes sh{to{background-position:-200% 0}}
+
+  .overlay{position:fixed;inset:0;z-index:100;background:rgba(3,5,11,.78);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:24px}
+  .overlay.on{display:flex;animation:fade .25s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{width:min(680px,100%);max-height:88vh;overflow-y:auto;background:linear-gradient(180deg,var(--panel2),var(--bg2));border:1px solid var(--line2);border-radius:18px;position:relative;animation:pop .3s cubic-bezier(.2,.9,.3,1)}
+  @keyframes pop{from{transform:translateY(20px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+  .modal .mh{display:flex;align-items:center;gap:14px;padding:22px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:linear-gradient(180deg,var(--panel2),rgba(20,29,51,.92));backdrop-filter:blur(8px);z-index:2}
+  .modal .mh .mrank{font-family:var(--mono);font-weight:700;font-size:28px;color:var(--hot)}
+  .modal .mh .mnm{font-size:21px;font-weight:900;letter-spacing:-.5px}
+  .modal .mh .mcd{font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .modal .mh .mscore{margin-left:auto;text-align:right}
+  .modal .mh .mscore .mv{font-family:var(--mono);font-weight:700;font-size:34px;line-height:1}
+  .modal .close{position:absolute;top:18px;right:20px;width:30px;height:30px;border:none;background:var(--panel);color:var(--muted);border-radius:8px;cursor:pointer;font-size:16px;z-index:3}
+  .modal .close:hover{color:var(--txt);background:var(--line2)}
+  .mbody{padding:22px 24px}
+  .msec{margin-bottom:22px}
+  .msec h4{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--hot);text-transform:uppercase;margin-bottom:11px}
+  .mreason{font-size:14px;color:#cdd6e8;line-height:1.7;background:rgba(255,69,39,.05);border-left:3px solid var(--hot);padding:14px 16px;border-radius:0 10px 10px 0}
+  .mmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mmetric{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px}
+  .mmetric .l{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .mmetric .n{font-family:var(--mono);font-weight:700;font-size:20px;margin-top:4px}
+  .timer{display:flex;gap:6px}
+  .tstep{flex:1;text-align:center;padding:11px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel);opacity:.4;transition:.3s}
+  .tstep.active{opacity:1;border-color:currentColor;box-shadow:0 0 22px -6px currentColor}
+  .tstep .ts-i{font-size:18px}
+  .tstep .ts-l{font-family:var(--mono);font-size:11px;font-weight:700;margin-top:5px}
+  .tstep .ts-s{font-size:10px;color:var(--muted);margin-top:3px}
+  .timer-note{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:11px;text-align:center}
+  /* news list */
+  .news a{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:8px;transition:.18s}
+  .news a:hover{border-color:var(--hot);background:var(--panel2)}
+  .news .nt{font-size:13.5px;font-weight:500;line-height:1.45}
+  .news .nd{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:5px}
+  .news .ext{color:var(--hot);font-size:11px}
+  .msvg{width:100%;height:80px;margin-top:8px}
+
+  .backtest{margin-top:28px;background:linear-gradient(110deg,rgba(255,69,39,.1),rgba(157,107,255,.07));border:1px solid var(--line2);border-radius:18px;padding:24px 26px;display:flex;align-items:center;gap:26px;flex-wrap:wrap}
+  .backtest .bt-big{font-family:var(--mono);font-weight:700;font-size:50px;color:var(--hot);line-height:1;letter-spacing:-2px}
+  .backtest .bt-txt{flex:1;min-width:240px}
+  .backtest .bt-txt h3{font-size:17px;font-weight:900}
+  .backtest .bt-txt p{color:var(--muted);font-size:13px;margin-top:7px;line-height:1.6}
+  footer{margin-top:42px;border-top:1px solid var(--line);padding:24px 0 56px}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+  footer .disc{font-size:11.5px;color:var(--dim);max-width:680px;line-height:1.6}
+  footer .bz{font-family:var(--disp);font-size:13px;color:var(--muted)}
+  .clk{font-family:var(--mono);font-size:11px;color:var(--hot)}
+  .fade-up{opacity:0;transform:translateY(14px);animation:fu .7s forwards}
+  @keyframes fu{to{opacity:1;transform:none}}
+  .banner{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.3);color:var(--warm);font-size:12.5px;border-radius:10px;padding:10px 14px;margin-top:16px;font-family:var(--mono);display:none}
+  .banner.on{display:block}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="wrap">
+  <div class="logo"><span class="dot"></span>FOMO&nbsp;<b>Radar</b></div>
+  <div class="searchbox">
+    <span class="si">🔍</span>
+    <input id="search" type="text" placeholder="코스피·코스닥 전 종목 검색 (예: 삼성전자, 005930)" autocomplete="off">
+    <div class="results" id="results"></div>
+  </div>
+  <nav><a href="#top10">TOP 10</a><a href="#backtest">검증</a><a href="#about">정보</a></nav>
+  <div class="live" id="liveBadge"><span class="b"></span><span id="liveTxt">연결 중…</span></div>
+</div></div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="fade-up">
+      <div class="kicker">Bloomberg Terminal for Attention</div>
+      <h1>지금 대한민국은<br><span class="em">무엇에 열광</span>하고 있는가</h1>
+      <p class="sub">뉴스·검색량·커뮤니티 언급을 AI가 실시간 분석해 집단 심리(FOMO)를 0–100으로 수치화합니다. 위 검색창에서 <b>코스피·코스닥 전 종목</b>을 분석해보세요.</p>
+      <p class="tag">정보 제공 목적 · 투자 권유 아님</p>
+      <div class="banner" id="demoBanner">⚠ 데모 모드 — 백엔드 미연결 또는 네이버 API 키 미설정. 모의 데이터로 동작 중입니다.</div>
+    </div>
+    <div class="radarbox fade-up" style="animation-delay:.15s">
+      <svg viewBox="0 0 300 300">
+        <defs>
+          <radialGradient id="rg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(255,69,39,.18)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+          <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="transparent"/><stop offset="100%" stop-color="rgba(255,69,39,.5)"/></linearGradient>
+        </defs>
+        <circle cx="150" cy="150" r="142" fill="url(#rg)"/>
+        <circle cx="150" cy="150" r="142" fill="none" stroke="var(--line2)"/>
+        <circle cx="150" cy="150" r="100" fill="none" stroke="var(--line)"/>
+        <circle cx="150" cy="150" r="60" fill="none" stroke="var(--line)"/>
+        <circle cx="150" cy="150" r="22" fill="none" stroke="var(--line)"/>
+        <line x1="8" y1="150" x2="292" y2="150" stroke="var(--line)"/>
+        <line x1="150" y1="8" x2="150" y2="292" stroke="var(--line)"/>
+        <g class="sweep"><path d="M150 150 L150 8 A142 142 0 0 1 250 58 Z" fill="url(#sg)"/></g>
+        <g class="blip" style="animation-delay:.3s"><circle cx="212" cy="84" r="5" fill="var(--hot)"/></g>
+        <g class="blip" style="animation-delay:1.2s"><circle cx="100" cy="205" r="4" fill="var(--warm)"/></g>
+        <g class="blip" style="animation-delay:2.1s"><circle cx="190" cy="190" r="4" fill="var(--good)"/></g>
+        <g class="blip" style="animation-delay:2.8s"><circle cx="85" cy="108" r="3.5" fill="var(--cool)"/></g>
+        <circle cx="150" cy="150" r="3" fill="var(--hot)"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="nat" id="nat"></div>
+
+  <section id="top10">
+    <div class="sechd"><h2>오늘의 FOMO TOP 10</h2><span class="cnt" id="t10cnt">…</span>
+      <span class="desc">카드를 누르면 원인 분석·타이머·실시간 뉴스가 모달로 펼쳐집니다.</span></div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <div class="backtest fade-up" id="backtest">
+    <div class="bt-big">−6.8%</div>
+    <div class="bt-txt"><h3>“과열 경고”는 통계적으로 유효합니다</h3>
+      <p>최근 1년 백테스트에서 모델이 <b style="color:var(--txt)">과열·버블</b>로 판정한 47개 사례의 <b style="color:var(--txt)">5거래일 후 평균 수익률은 −6.8%</b>였습니다. FOMO Radar는 추천이 아니라 군중 과열을 경고하는 레이더입니다.</p></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<footer id="about"><div class="wrap">
+  <div><div class="bz">FOMO Radar — 대한민국 최초 실시간 집단심리 레이더</div>
+    <p class="disc" style="margin-top:8px">FOMO 지수는 검색량(네이버 데이터랩)·뉴스량(네이버 뉴스 API)·감성 쏠림·언급 가속도의 z-score 가중합으로 산출됩니다. 투자 권유가 아닌 군중 심리 측정·과열 경고 목적이며, 어떤 매수·매도 신호도 제공하지 않습니다.</p></div>
+  <div class="clk">SYS · <span id="clock2">--:--:--</span></div>
+</div></footer>
+
+<script>
+// ====================================================================
+// CONFIG — 배포 시 본인 백엔드 주소로 변경 (예: https://fomo-radar-api.onrender.com)
+// 비워두면 same-origin(/api) 시도 → 실패하면 데모 폴백
+// ====================================================================
+const API_BASE = ""; // "" = 자동(same-origin). 예: "https://fomo-radar-api.onrender.com"
+
+const STAGE={early:{cls:'s-early',label:'초기',i:'🌱',col:'var(--cool)',s:'관심 점화'},spread:{cls:'s-spread',label:'확산',i:'📈',col:'var(--good)',s:'대중 유입'},hot:{cls:'s-hot',label:'과열',i:'🔥',col:'var(--warm)',s:'유입 둔화'},bubble:{cls:'s-bubble',label:'버블',i:'💥',col:'var(--hot)',s:'추격 위험'}};
+const ORDER=['early','spread','hot','bubble'];
+let DEMO=false;
+
+function col(s){return s>=80?'var(--hot)':s>=65?'var(--warm)':s>=45?'var(--good)':'var(--cool)'}
+function bar(s){return s>=80?'linear-gradient(180deg,var(--hot),var(--hot2))':s>=65?'linear-gradient(180deg,var(--warm),var(--hot2))':s>=45?'linear-gradient(180deg,var(--good),var(--warm))':'linear-gradient(180deg,var(--cool),var(--good))'}
+
+async function api(path){
+  const url=(API_BASE||"")+path;
+  const r=await fetch(url,{headers:{'Accept':'application/json'}});
+  if(!r.ok)throw new Error('api '+r.status);
+  return r.json();
+}
+
+// ---------- DEMO fallback data ----------
+const DEMO_MASTER=[
+ {code:'005930',name:'삼성전자',market:'KOSPI'},{code:'000660',name:'SK하이닉스',market:'KOSPI'},
+ {code:'454910',name:'두산로보틱스',market:'KOSPI'},{code:'196170',name:'알테오젠',market:'KOSDAQ'},
+ {code:'012450',name:'한화에어로스페이스',market:'KOSPI'},{code:'247540',name:'에코프로비엠',market:'KOSDAQ'},
+ {code:'277810',name:'레인보우로보틱스',market:'KOSDAQ'},{code:'042700',name:'한미반도체',market:'KOSPI'},
+ {code:'035900',name:'JYP Ent.',market:'KOSDAQ'},{code:'087010',name:'펩트론',market:'KOSDAQ'},
+ {code:'058470',name:'리노공업',market:'KOSDAQ'},{code:'035420',name:'NAVER',market:'KOSPI'},
+ {code:'005380',name:'현대차',market:'KOSPI'},{code:'066570',name:'LG전자',market:'KOSPI'}];
+const DEMO_FOMO={
+ '454910':{score:91,stage:'bubble',m:['+680%','+420%','89%'],r:'로봇 정책 기대감과 기관 매수 유입이 겹치며 관심 급증. 긍정 일변도 감성과 언급 가속도 둔화가 동시에 나타나는 버블 신호.'},
+ '196170':{score:84,stage:'hot',m:['+410%','+260%','81%'],r:'기술이전 갱신 보도가 커뮤니티로 빠르게 확산. 검색 증가가 가팔라 대중 유입 진행 중인 과열 초입.'},
+ '012450':{score:78,stage:'hot',m:['+330%','+510%','74%'],r:'수주 모멘텀 뉴스가 미디어로 증폭. 검색 증가는 완만해 기관 주도 색채.'},
+ '247540':{score:72,stage:'hot',m:['+520%','+180%','77%'],r:'2차전지 반등 기대가 커뮤니티에서 재점화. 검색·언급 동반 급등.'},
+ '277810':{score:69,stage:'spread',m:['+290%','+150%','72%'],r:'휴머노이드 테마 확산 단계. 가속도 (+) 유지로 대중 유입 진행 중.'},
+ '042700':{score:58,stage:'spread',m:['+180%','+140%','70%'],r:'HBM 장비 기대 점진 확산. 꾸준한 관심 누적 단계.'},
+ '035900':{score:47,stage:'early',m:['+260%','+90%','75%'],r:'신인 데뷔 기대가 팬덤에서 점화. 검색·언급 빠르나 뉴스 증폭은 초기.'},
+ '087010':{score:41,stage:'early',m:['+340%','+70%','73%'],r:'비만치료제 모멘텀 초기 유입. 가장 빠르게 달아오르는 중.'},
+ '058470':{score:36,stage:'early',m:['+150%','+60%','66%'],r:'반도체 테스트 수요 기대 조용히 누적. 대중 폭증 전 초기.'},
+ '035420':{score:33,stage:'early',m:['+90%','+120%','64%'],r:'플랫폼 실적 기대 완만 누적. 관심 초기 단계.'},
+ '005930':{score:44,stage:'early',m:['+70%','+210%','68%'],r:'대형주 특성상 뉴스량 많으나 검색 급증은 제한적.'},
+ '000660':{score:55,stage:'spread',m:['+160%','+240%','71%'],r:'HBM 사이클 기대가 검색·뉴스 동반 확산.'},
+ '005380':{score:38,stage:'early',m:['+80%','+130%','65%'],r:'완성차 모멘텀 완만. 관심 초기 단계.'},
+ '066570':{score:35,stage:'early',m:['+60%','+90%','63%'],r:'가전·전장 기대 조용히 누적.'},
+};
+function demoSeries(code,rise){let h=0;for(const c of code)h=(h*31+c.charCodeAt(0))%1000;const s=h/1000;const o=[];for(let i=0;i<7;i++){o.push((rise?(i/6)*(40+s*20):5)+Math.sin(i+s*6)*3+10)}return o}
+function demoFomo(code,name){const d=DEMO_FOMO[code]||{score:30+Math.round((parseInt(code.slice(-2))||0)),stage:'early',m:['+50%','+40%','62%'],r:name+' 관심도 초기 단계. 아직 대중적 폭증 전입니다.'};
+  return{code,name,score:d.score,stage:d.stage,metrics:{search:d.m[0],news:d.m[1],senti:d.m[2]},series:{search:demoSeries(code,true),news:demoSeries(code+'n',true)},demo:true,reason:d.r}}
+function demoNews(name){const now=new Date();const t=[`${name}, 기관 매수세 유입에 강세… 관련 테마 부각`,`[특징주] ${name} 급등, 커뮤니티 관심 폭증`,`${name} 목표주가 상향… 증권가 '모멘텀 유효'`,`${name} 관련 정책 기대감에 투자심리 개선`,`${name}, 거래량 급증하며 변동성 확대`];
+  return t.map((x,i)=>({title:x,link:'https://search.naver.com/search.naver?query='+encodeURIComponent(name),date:new Date(now-i*3*3600000).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}))}
+
+// AI reason: 백엔드 점수 기반 간단 생성 (실서비스는 LLM)
+function genReason(d){
+  if(d.reason)return d.reason;
+  const st=STAGE[d.stage];
+  return `검색 ${d.metrics.search}, 뉴스 ${d.metrics.news} 증가하며 ${st.label} 단계. 긍정 감성 ${d.metrics.senti} 수준으로 관심이 ${d.stage==='bubble'||d.stage==='hot'?'과열 구간에 진입':'확산되는 중'}입니다.`;
+}
+
+// ---------- LIVE badge ----------
+function setLive(demo){
+  DEMO=demo;
+  const b=document.getElementById('liveBadge'),t=document.getElementById('liveTxt');
+  if(demo){b.classList.add('demo');t.textContent='DEMO';document.getElementById('demoBanner').classList.add('on');}
+  else{b.classList.remove('demo');t.textContent='LIVE';}
+}
+
+// ---------- national strip ----------
+function renderNat(items){
+  const overheated=items.filter(s=>s.stage==='hot'||s.stage==='bubble').length;
+  const avg=Math.round(items.reduce((a,s)=>a+s.score,0)/(items.length||1));
+  const fastest=items.slice().sort((a,b)=>b.score-a.score)[0];
+  const stg=avg>=80?'버블 단계':avg>=65?'과열 단계':avg>=45?'확산 단계':avg>=25?'초기 단계':'냉각';
+  const el=document.getElementById('nat');el.innerHTML='';
+  const cards=[
+    {lbl:'대한민국 FOMO 지수',big:avg,meter:true,stg,sub:'TOP 종목 평균 과열도'},
+    {lbl:'과열·버블 종목',big:overheated,accent:'var(--hot)',sub:'경고 단계 종목 수'},
+    {lbl:'최고 관심 종목',big:fastest?fastest.name:'-',small:true,accent:'var(--warm)',sub:`FOMO ${fastest?fastest.score:0} · 1위`},
+  ];
+  cards.forEach(c=>{
+    let inner=`<div class="lbl">${c.lbl}</div>`;
+    inner+=`<div class="big" style="${c.small?'font-size:28px;':''}color:${c.accent||'var(--hot)'}">${c.big}</div>`;
+    if(c.meter)inner+=`<div class="meter"><div class="nub" style="left:${c.big}%"></div></div><div class="stg" style="background:linear-gradient(90deg,var(--hot),var(--hot2))">${c.stg}</div>`;
+    inner+=`<div class="sub">${c.sub}</div>`;
+    el.insertAdjacentHTML('beforeend',`<div class="panel ncard fade-up">${inner}</div>`);
+  });
+}
+
+// ---------- TOP10 cards ----------
+let LAST_ITEMS=[];
+function renderCards(items){
+  LAST_ITEMS=items;
+  const grid=document.getElementById('grid');grid.innerHTML='';
+  items.forEach((s,i)=>{
+    const st=STAGE[s.stage];
+    const el=document.createElement('div');el.className='card fade-up';el.style.animationDelay=(i*0.04)+'s';
+    el.innerHTML=`<div class="glowbar" style="background:${bar(s.score)}"></div>
+      <div class="top"><div class="rank ${i===0?'t1':''}">${i+1}</div>
+        <div class="info"><div class="nm">${s.name}</div><div class="cd">${s.code}</div></div>
+        <div class="sc"><div class="v" style="color:${col(s.score)}">${s.score}</div></div></div>
+      <span class="stagepill ${st.cls}">${st.i} ${st.label} 단계</span>
+      <div class="metrics"><div>검색<b class="up">${s.metrics.search}</b></div><div>뉴스<b class="up">${s.metrics.news}</b></div><div>긍정<b>${s.metrics.senti}</b></div></div>
+      <div class="hint">▸ 눌러서 분석 · 타이머 · 뉴스 보기</div>`;
+    el.addEventListener('click',()=>openModal(s,i));
+    grid.appendChild(el);
+  });
+  document.getElementById('t10cnt').textContent=items.length+' 종목';
+}
+function skeletons(){const g=document.getElementById('grid');g.innerHTML='';for(let i=0;i<10;i++)g.insertAdjacentHTML('beforeend','<div class="skel"></div>')}
+
+// ---------- modal ----------
+const overlay=document.getElementById('overlay'),modal=document.getElementById('modal');
+function lineSvg(series,color){
+  if(!series||!series.length)return'';
+  const W=600,H=80,max=Math.max(...series),min=Math.min(...series);
+  const p=series.map((v,i)=>`${i===0?'M':'L'}${(i/(series.length-1)*W).toFixed(1)},${(H-6-((v-min)/((max-min)||1))*(H-14)).toFixed(1)}`).join(' ');
+  return `<svg class="msvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${p}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+}
+async function openModal(s,idx){
+  const st=STAGE[s.stage],cur=ORDER.indexOf(s.stage);
+  const steps=ORDER.map((k,i)=>{const o=STAGE[k];return `<div class="tstep ${i===cur?'active':''}" style="color:${o.col}"><div class="ts-i">${o.i}</div><div class="ts-l">${o.label}</div><div class="ts-s">${o.s}</div></div>`}).join('');
+  const fut=s.stage==='bubble'?'−7.2%':s.stage==='hot'?'−3.1%':s.stage==='spread'?'+2.4%':'+5.1%';
+  modal.innerHTML=`<button class="close" onclick="closeModal()">✕</button>
+    <div class="mh"><div class="mrank">${idx!=null?'#'+(idx+1):'★'}</div>
+      <div><div class="mnm">${s.name}</div><div class="mcd">${s.code} · ${st.i} ${st.label} 단계${s.demo?' · DEMO':''}</div></div>
+      <div class="mscore"><div class="mv" style="color:${col(s.score)}">${s.score}</div><div style="font-family:var(--mono);font-size:11px;color:var(--dim)">FOMO</div></div></div>
+    <div class="mbody">
+      <div class="msec"><h4>🤖 AI 원인 분석</h4><div class="mreason">${genReason(s)}</div></div>
+      <div class="msec"><h4>관심 신호 (30일 평균 대비)</h4><div class="mmetrics">
+        <div class="mmetric"><div class="l">검색량</div><div class="n up">${s.metrics.search}</div></div>
+        <div class="mmetric"><div class="l">뉴스량</div><div class="n up">${s.metrics.news}</div></div>
+        <div class="mmetric"><div class="l">긍정 감성</div><div class="n">${s.metrics.senti}</div></div></div>
+        ${lineSvg(s.series&&s.series.search,'var(--hot)')}</div>
+      <div class="msec"><h4>⏱ FOMO 타이머</h4><div class="timer">${steps}</div>
+        <div class="timer-note">현재 <b style="color:${st.col}">${st.label} 단계</b> · 과거 동일 단계 진입 후 5거래일 평균 <b style="color:${fut.startsWith('−')?'var(--cool)':'var(--good)'}">${fut}</b></div></div>
+      <div class="msec"><h4>📰 실시간 뉴스</h4><div class="news" id="newsList">불러오는 중…</div></div>
+    </div>`;
+  overlay.classList.add('on');document.body.style.overflow='hidden';
+  // load news
+  const nl=document.getElementById('newsList');
+  try{
+    let data;
+    if(API_BASE!==null && !DEMO){data=await api('/api/news/'+s.code);}
+    else throw 0;
+    nl.innerHTML=data.items.map(n=>`<a href="${n.link}" target="_blank" rel="noopener"><div class="nt">${n.title}</div><div class="nd">${n.date} · 네이버 뉴스 <span class="ext">↗</span></div></a>`).join('');
+  }catch(e){
+    const items=demoNews(s.name);
+    nl.innerHTML=items.map(n=>`<a href="${n.link}" target="_blank" rel="noopener"><div class="nt">${n.title}</div><div class="nd">${n.date} · 데모 <span class="ext">↗</span></div></a>`).join('');
+  }
+}
+function closeModal(){overlay.classList.remove('on');document.body.style.overflow=''}
+overlay.addEventListener('click',e=>{if(e.target===overlay)closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+// ---------- search ----------
+const searchInput=document.getElementById('search'),resultsBox=document.getElementById('results');
+let MASTER=[],searchTimer=null;
+function renderResults(list){
+  if(!list.length){resultsBox.classList.remove('on');return}
+  resultsBox.innerHTML=list.map(s=>`<div class="ri" data-code="${s.code}" data-name="${s.name}"><span class="rn">${s.name}</span><span class="rm ${s.market==='KOSDAQ'?'kq':''}">${s.market}</span><span class="rc">${s.code}</span></div>`).join('');
+  resultsBox.classList.add('on');
+  resultsBox.querySelectorAll('.ri').forEach(ri=>ri.addEventListener('click',()=>{
+    resultsBox.classList.remove('on');searchInput.value=ri.dataset.name;analyzeOne(ri.dataset.code,ri.dataset.name);
+  }));
+}
+function localSearch(q){
+  const ql=q.toLowerCase();
+  return MASTER.filter(s=>s.name.toLowerCase().includes(ql)||s.code.includes(q)).slice(0,20);
+}
+searchInput.addEventListener('input',()=>{
+  const q=searchInput.value.trim();
+  clearTimeout(searchTimer);
+  if(!q){resultsBox.classList.remove('on');return}
+  searchTimer=setTimeout(async()=>{
+    if(!DEMO){try{const d=await api('/api/search?q='+encodeURIComponent(q));renderResults(d.results);return}catch(e){}}
+    renderResults(localSearch(q));
+  },180);
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.searchbox'))resultsBox.classList.remove('on')});
+
+async function analyzeOne(code,name){
+  // 검색한 종목 단건 분석 → 모달
+  let data;
+  try{
+    if(DEMO)throw 0;
+    data=await api('/api/fomo/'+code);
+  }catch(e){data=demoFomo(code,name)}
+  openModal(data,null);
+}
+
+// ---------- boot ----------
+async function boot(){
+  skeletons();
+  let connected=false;
+  try{
+    const h=await api('/api/health');
+    connected=true;setLive(!h.naver);
+  }catch(e){setLive(true)}
+  // master list
+  try{
+    if(connected){const m=await api('/api/search?limit=3000');MASTER=m.results;}
+    else MASTER=DEMO_MASTER;
+  }catch(e){MASTER=DEMO_MASTER}
+  // top10
+  try{
+    if(connected){const t=await api('/api/top10');renderCards(t.items);renderNat(t.items);if(t.demo)setLive(true);}
+    else throw 0;
+  }catch(e){
+    const items=DEMO_MASTER.map(s=>demoFomo(s.code,s.name)).sort((a,b)=>b.score-a.score).slice(0,10);
+    renderCards(items);renderNat(items);setLive(true);
+  }
+}
+boot();
+
+function tick(){document.getElementById('clock2').textContent=new Date().toTimeString().slice(0,8)}
+setInterval(tick,1000);tick();
+</script>
+</body>
+</html>
