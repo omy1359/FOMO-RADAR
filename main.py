@@ -380,14 +380,20 @@ async def news(code: str):
         return {"demo": True, "items": _demo_news(name)}
 
 # 미리 계산해 둘 인기 종목 (TOP10 기본 풀)
+# 미리 계산할 관심 종목 풀 (거래량·관심도 높은 종목 위주, 30개+)
 WATCH = ["454910", "196170", "012450", "247540", "277810",
          "042700", "035900", "087010", "058470", "035420",
-         "005930", "000660", "005380", "066570"]
+         "005930", "000660", "005380", "066570", "086520",
+         "042660", "329180", "328130", "141080", "348370",
+         "373220", "207940", "068270", "035720", "259960",
+         "036570", "251270", "293490", "112040", "047810",
+         "079550", "267260", "010140", "352820", "041510"]
 
 @app.get("/api/top10")
-async def top10():
-    """인기 종목 풀에서 FOMO 점수 상위 10개."""
-    if (hit := cache.get("top10")):
+async def top10(limit: int = 30):
+    """인기 종목 풀에서 FOMO 점수 상위 N개 (기본 30개 반환, 프론트가 10/30 토글)."""
+    ck = f"top:{limit}"
+    if (hit := cache.get(ck)):
         return hit
     master = {s["code"]: s for s in load_stock_master()}
     results = []
@@ -399,8 +405,8 @@ async def top10():
         results.append(r)
     results.sort(key=lambda x: x["score"], reverse=True)
     payload = {"updated": dt.datetime.now().isoformat(timespec="seconds"),
-               "demo": not HAS_NAVER, "items": results[:10]}
-    cache.set("top10", payload, TOP10_TTL)
+               "demo": not HAS_NAVER, "items": results[:limit]}
+    cache.set(ck, payload, TOP10_TTL)
     return payload
 
 def _demo_news(name: str) -> list[dict]:

@@ -211,6 +211,11 @@
     <div class="sechd"><h2>오늘의 FOMO TOP 10</h2><span class="cnt" id="t10cnt">…</span>
       <span class="desc">카드를 누르면 원인 분석·타이머·실시간 뉴스가 모달로 펼쳐집니다.</span></div>
     <div class="grid" id="grid"></div>
+    <div style="text-align:center;margin-top:18px">
+      <button id="moreBtn" style="display:none;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--hot);background:rgba(255,69,39,.07);border:1px solid rgba(255,69,39,.35);border-radius:24px;padding:11px 26px;cursor:pointer;transition:.2s">
+        ▾ 11–30위 더 보기
+      </button>
+    </div>
   </section>
 
   <div class="backtest fade-up" id="backtest">
@@ -336,25 +341,39 @@ function renderNat(items){
 }
 
 // ---------- TOP10 cards ----------
-let LAST_ITEMS=[];
-function renderCards(items){
-  LAST_ITEMS=items;
-  const grid=document.getElementById('grid');grid.innerHTML='';
-  items.forEach((s,i)=>{
-    const st=STAGE[s.stage];
-    const el=document.createElement('div');el.className='card fade-up';el.style.animationDelay=(i*0.04)+'s';
-    el.innerHTML=`<div class="glowbar" style="background:${bar(s.score)}"></div>
-      <div class="top"><div class="rank ${i===0?'t1':''}">${i+1}</div>
-        <div class="info"><div class="nm">${s.name}</div><div class="cd">${s.code}</div></div>
-        <div class="sc"><div class="v" style="color:${col(s.score)}">${s.score}</div></div></div>
-      <span class="stagepill ${st.cls}">${st.i} ${st.label} 단계</span>
-      <div class="metrics"><div>검색<b class="up">${s.metrics.search}</b></div><div>뉴스<b class="up">${s.metrics.news}</b></div><div>긍정<b>${s.metrics.senti}</b></div></div>
-      <div class="hint">▸ 눌러서 분석 · 타이머 · 뉴스 보기</div>`;
-    el.addEventListener('click',()=>openModal(s,i));
-    grid.appendChild(el);
-  });
-  document.getElementById('t10cnt').textContent=items.length+' 종목';
+let LAST_ITEMS=[], EXPANDED=false;
+function cardEl(s,i){
+  const st=STAGE[s.stage];
+  const el=document.createElement('div');el.className='card fade-up';el.style.animationDelay=((i%10)*0.04)+'s';
+  el.innerHTML=`<div class="glowbar" style="background:${bar(s.score)}"></div>
+    <div class="top"><div class="rank ${i===0?'t1':''}">${i+1}</div>
+      <div class="info"><div class="nm">${s.name}</div><div class="cd">${s.code}</div></div>
+      <div class="sc"><div class="v" style="color:${col(s.score)}">${s.score}</div></div></div>
+    <span class="stagepill ${st.cls}">${st.i} ${st.label} 단계</span>
+    <div class="metrics"><div>검색<b class="up">${s.metrics.search}</b></div><div>뉴스<b class="up">${s.metrics.news}</b></div><div>긍정<b>${s.metrics.senti}</b></div></div>
+    <div class="hint">▸ 눌러서 분석 · 타이머 · 뉴스 보기</div>`;
+  el.addEventListener('click',()=>openModal(s,i));
+  return el;
 }
+function paintCards(){
+  const grid=document.getElementById('grid');grid.innerHTML='';
+  const shown=EXPANDED?LAST_ITEMS:LAST_ITEMS.slice(0,10);
+  shown.forEach((s,i)=>grid.appendChild(cardEl(s,i)));
+  const btn=document.getElementById('moreBtn');
+  if(LAST_ITEMS.length>10){
+    btn.style.display='inline-block';
+    btn.textContent=EXPANDED?'▴ TOP 10만 보기':`▾ 11–${LAST_ITEMS.length}위 더 보기`;
+  }else{btn.style.display='none';}
+  document.getElementById('t10cnt').textContent=`${shown.length} / ${LAST_ITEMS.length} 종목`;
+}
+function renderCards(items){
+  LAST_ITEMS=items; EXPANDED=false; paintCards();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const b=document.getElementById('moreBtn');
+  if(b)b.addEventListener('click',()=>{EXPANDED=!EXPANDED;paintCards();
+    if(!EXPANDED)document.getElementById('top10').scrollIntoView({behavior:'smooth'});});
+});
 function skeletons(){const g=document.getElementById('grid');g.innerHTML='';for(let i=0;i<10;i++)g.insertAdjacentHTML('beforeend','<div class="skel"></div>')}
 
 // ---------- modal ----------
@@ -479,12 +498,12 @@ async function boot(){
     if(connected){const m=await api('/api/search?limit=3000');MASTER=m.results;}
     else MASTER=DEMO_MASTER;
   }catch(e){MASTER=DEMO_MASTER}
-  // top10
+  // top list (TOP 10 기본 + 더보기로 30위)
   try{
-    if(connected){const t=await api('/api/top10');renderCards(t.items);renderNat(t.items);if(t.demo)setLive(true);}
+    if(connected){const t=await api('/api/top10?limit=30');renderCards(t.items);renderNat(t.items);if(t.demo)setLive(true);}
     else throw 0;
   }catch(e){
-    const items=DEMO_MASTER.map(s=>demoFomo(s.code,s.name)).sort((a,b)=>b.score-a.score).slice(0,10);
+    const items=DEMO_MASTER.map(s=>demoFomo(s.code,s.name)).sort((a,b)=>b.score-a.score);
     renderCards(items);renderNat(items);setLive(true);
   }
 }
