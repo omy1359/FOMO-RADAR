@@ -233,7 +233,7 @@
 // CONFIG — 배포 시 본인 백엔드 주소로 변경 (예: https://fomo-radar-api.onrender.com)
 // 비워두면 same-origin(/api) 시도 → 실패하면 데모 폴백
 // ====================================================================
-const API_BASE = ""; // "" = 자동(same-origin). 예: "https://fomo-radar-api.onrender.com"
+const API_BASE = "https://fomo-radar-o8pt.onrender.com"; // 백엔드(Render) 연결. 데모로 되돌리려면 "" 로.
 
 const STAGE={early:{cls:'s-early',label:'초기',i:'🌱',col:'var(--cool)',s:'관심 점화'},spread:{cls:'s-spread',label:'확산',i:'📈',col:'var(--good)',s:'대중 유입'},hot:{cls:'s-hot',label:'과열',i:'🔥',col:'var(--warm)',s:'유입 둔화'},bubble:{cls:'s-bubble',label:'버블',i:'💥',col:'var(--hot)',s:'추격 위험'}};
 const ORDER=['early','spread','hot','bubble'];
