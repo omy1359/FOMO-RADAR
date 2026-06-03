@@ -4,7 +4,7 @@ FOMO Radar — Backend (FastAPI)
 한국 투자자 집단 심리(FOMO) 실시간 분석 API.
 
 핵심 설계:
-  - 코스피·코스닥 전 종목 검색 (pykrx, 캐시)
+  - 코스피·코스닥 종목 검색 (stocks.csv, 캐시)
   - 종목별 FOMO 점수 = z-score 가중합 → 시그모이드 → 0~100
   - 데이터 소스: 네이버 검색/데이터랩 API (키 있을 때) → 없으면 데모 폴백
   - 무료 API 한도 보호: 온디맨드 계산 + TTL 캐시
@@ -72,21 +72,37 @@ cache = TTLCache()
 _STOCKS: list[dict] = []
 
 def load_stock_master() -> list[dict]:
-    """pykrx로 전 종목 로드. 실패 시 소형 데모 목록."""
+    """종목 마스터를 stocks.csv에서 로드.
+    - utf-8-sig 로 BOM 자동 제거
+    - 헤더가 틀어져도 컬럼 위치(0=code,1=name,2=market)로 폴백
+    - 실패 시 데모 목록"""
     global _STOCKS
     if _STOCKS:
         return _STOCKS
+    import csv
+    csv_path = os.path.join(os.path.dirname(__file__), "stocks.csv")
     try:
-        from pykrx import stock as krx
-        today = dt.datetime.now().strftime("%Y%m%d")
         rows = []
-        for market in ("KOSPI", "KOSDAQ"):
-            for code in krx.get_market_ticker_list(today, market=market):
-                name = krx.get_market_ticker_name(code)
+        with open(csv_path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)  # 첫 줄(헤더) 건너뜀
+            for r in reader:
+                if len(r) < 2:
+                    continue
+                code = r[0].strip()
+                name = r[1].strip()
+                market = r[2].strip() if len(r) > 2 else ""
+                if not code or not name:
+                    continue
                 rows.append({"code": code, "name": name, "market": market})
-        _STOCKS = rows
-    except Exception as e:  # pykrx 미설치/네트워크 실패 → 데모
-        print(f"[stock master] pykrx 실패, 데모 목록 사용: {e}")
+        if rows:
+            _STOCKS = rows
+            print(f"[stock master] stocks.csv 로드 성공: {len(rows)}종목")
+        else:
+            print("[stock master] stocks.csv 가 비어있음 → 데모 목록")
+            _STOCKS = DEMO_STOCK_MASTER
+    except Exception as e:
+        print(f"[stock master] stocks.csv 로드 실패, 데모 목록 사용: {e}")
         _STOCKS = DEMO_STOCK_MASTER
     return _STOCKS
 
@@ -304,6 +320,21 @@ class StockHit(BaseModel):
 def root():
     return {"service": "FOMO Radar API", "naver_connected": HAS_NAVER,
             "stocks_loaded": len(load_stock_master())}
+
+@app.get("/api/debug")
+def debug():
+    import os
+    csv_path = os.path.join(os.path.dirname(__file__), "stocks.csv")
+    info = {"csv_exists": os.path.exists(csv_path), "csv_path": csv_path}
+    try:
+        with open(csv_path, encoding="utf-8-sig") as f:
+            head = [next(f) for _ in range(3)]
+        info["first_lines"] = [l.rstrip() for l in head]
+    except Exception as e:
+        info["read_error"] = str(e)
+    info["stocks_loaded"] = len(load_stock_master())
+    return info
+
 
 @app.get("/api/health")
 def health():
